@@ -1,0 +1,331 @@
+/* The GLM quota panel. Prefixed `glmq-` so it never meets the app's classes. */
+
+.glmq {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  padding: 12px;
+  font-size: 12px;
+  line-height: 1.45;
+  color: var(--v2-text-text-base);
+  height: 100%;
+  overflow-y: auto;
+}
+
+/* ---------- header ---------- */
+
+.glmq-head {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 0 2px;
+}
+
+.glmq-title {
+  font-weight: 620;
+  font-size: 12px;
+}
+
+.glmq-level {
+  padding: 1px 7px;
+  border-radius: 999px;
+  background: var(--v2-background-bg-deep);
+  color: var(--v2-text-text-muted);
+  font-size: 10px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+}
+
+.glmq-flag {
+  padding: 1px 7px;
+  border-radius: 999px;
+  background: color-mix(in srgb, var(--icon-critical-base, #e5484d) 14%, transparent);
+  color: var(--icon-critical-base, #e5484d);
+  font-size: 10px;
+  font-weight: 600;
+}
+
+.glmq-refresh {
+  margin-left: auto;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 22px;
+  height: 22px;
+  border: none;
+  border-radius: 6px;
+  background: none;
+  color: var(--v2-icon-icon-base);
+  cursor: pointer;
+}
+
+.glmq-refresh:hover:not(:disabled) {
+  background: var(--v2-background-bg-deep);
+  color: var(--v2-icon-icon-accent);
+}
+
+.glmq-refresh:disabled {
+  opacity: 0.45;
+  cursor: default;
+}
+
+/* ---------- cards ---------- */
+
+.glmq-body {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.glmq-card {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding: 10px 12px 12px;
+  border: 1px solid var(--v2-border-border-muted, transparent);
+  border-radius: 10px;
+  background: color-mix(in srgb, var(--v2-background-bg-deep) 55%, transparent);
+}
+
+.glmq-card-row {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 8px;
+}
+
+.glmq-card-title {
+  font-size: 11px;
+  font-weight: 620;
+  color: var(--v2-text-text-muted);
+}
+
+.glmq-gran {
+  font-size: 10px;
+  color: var(--v2-text-text-faint);
+}
+
+/* ---------- quota limits ---------- */
+
+.glmq-limit + .glmq-limit {
+  border-top: 1px solid var(--v2-border-border-muted, transparent);
+  padding-top: 10px;
+  margin-top: 2px;
+}
+
+.glmq-limit-head {
+  display: flex;
+  justify-content: space-between;
+  align-items: baseline;
+  margin-bottom: 5px;
+}
+
+.glmq-limit-name {
+  color: var(--v2-text-text-base);
+}
+
+.glmq-limit-pct {
+  font-variant-numeric: tabular-nums;
+  font-weight: 620;
+}
+
+.glmq-bar {
+  height: 6px;
+  border-radius: 999px;
+  background: var(--v2-background-bg-deep);
+  overflow: hidden;
+}
+
+.glmq-fill {
+  height: 100%;
+  border-radius: 999px;
+  transition: width 0.3s ease;
+}
+
+.glmq-sub {
+  display: flex;
+  justify-content: space-between;
+  gap: 8px;
+  margin-top: 4px;
+  font-size: 11px;
+  color: var(--v2-text-text-muted);
+  min-height: 1em;
+}
+
+/* ---------- usage totals ---------- */
+
+.glmq-totals {
+  display: flex;
+  gap: 18px;
+}
+
+.glmq-total b {
+  display: block;
+  font-size: 15px;
+  font-weight: 620;
+  font-variant-numeric: tabular-nums;
+}
+
+.glmq-total span {
+  font-size: 10px;
+  color: var(--v2-text-text-muted);
+}
+
+/* ---------- chart with axes ---------- */
+
+.glmq-chart {
+  display: flex;
+  flex-direction: column;
+  margin-top: 2px;
+}
+
+.glmq-plot {
+  position: relative;
+  display: flex;
+  height: 84px;
+  margin-top: 10px;
+}
+
+/* A left gutter carries the y tick labels, so they never sit over bars. */
+.glmq-gutter {
+  position: relative;
+  flex: none;
+  width: 36px;
+}
+
+.glmq-ylabel {
+  position: absolute;
+  right: 5px;
+  transform: translateY(-50%);
+  font-size: 9px;
+  line-height: 1;
+  color: var(--v2-text-text-faint);
+  white-space: nowrap;
+  font-variant-numeric: tabular-nums;
+  pointer-events: none;
+}
+
+.glmq-area {
+  position: relative;
+  flex: 1;
+  min-width: 0;
+}
+
+.glmq-gridline {
+  position: absolute;
+  left: 0;
+  right: 0;
+  height: 1px;
+  background: color-mix(in srgb, var(--v2-border-border-muted, currentColor) 45%, transparent);
+  pointer-events: none;
+}
+
+.glmq-bars {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  display: block;
+  color: var(--v2-icon-icon-accent);
+  opacity: 0.9;
+}
+
+.glmq-xlabels {
+  display: flex;
+  justify-content: space-between;
+  margin-top: 3px;
+  margin-left: 36px;
+  font-size: 9px;
+  line-height: 1;
+  color: var(--v2-text-text-faint);
+  font-variant-numeric: tabular-nums;
+}
+
+/* ---------- model breakdown ---------- */
+
+.glmq-models {
+  margin-top: 4px;
+  display: flex;
+  flex-direction: column;
+  gap: 7px;
+}
+
+.glmq-models-title {
+  font-size: 10px;
+  color: var(--v2-text-text-faint);
+}
+
+.glmq-model {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+  font-size: 11px;
+}
+
+.glmq-model-head {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 8px;
+}
+
+.glmq-model-name {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  color: var(--v2-text-text-base);
+}
+
+.glmq-model-bar {
+  display: block;
+  width: 100%;
+  height: 4px;
+  border-radius: 999px;
+  background: var(--v2-background-bg-deep);
+  overflow: hidden;
+}
+
+.glmq-model-fill {
+  display: block;
+  height: 100%;
+  border-radius: 999px;
+  background: var(--v2-icon-icon-accent);
+}
+
+.glmq-model-tokens {
+  flex: none;
+  font-variant-numeric: tabular-nums;
+  color: var(--v2-text-text-muted);
+  text-align: end;
+}
+
+.glmq-none {
+  font-size: 11px;
+  color: var(--v2-text-text-faint);
+}
+
+/* ---------- status & footer ---------- */
+
+.glmq-status-title {
+  font-weight: 620;
+  color: var(--v2-text-text-base);
+  margin-bottom: 4px;
+}
+
+.glmq-status-detail {
+  font-size: 11px;
+  margin-top: 4px;
+  color: var(--v2-text-text-muted);
+}
+
+.glmq-status-error .glmq-status-title {
+  color: var(--icon-critical-base, #e5484d);
+}
+
+.glmq-foot {
+  font-size: 10px;
+  color: var(--v2-text-text-faint);
+  padding: 0 2px;
+}

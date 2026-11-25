@@ -1,0 +1,5 @@
+node_modules/
+.kagent/
+*.tgz
+*.log
+.DS_Store

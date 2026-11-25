@@ -1,0 +1,48 @@
+{
+  "name": "opencode-glm-plugin",
+  "version": "1.0.0",
+  "description": "GLM Coding Plan quota panel for OpenCode Desktop: plan limits, rate-limit status, 7-day and 30-day usage.",
+  "type": "module",
+  "license": "MIT",
+  "author": "AI码上到",
+  "keywords": [
+    "opencode",
+    "opencode-plugin",
+    "glm",
+    "zhipu",
+    "bigmodel",
+    "coding-plan",
+    "quota",
+    "usage"
+  ],
+  "exports": {
+    ".": "./src/index.ts",
+    "./gui-experimental": "./dist/gui-experimental.cjs"
+  },
+  "files": [
+    "src",
+    "dist"
+  ],
+  "scripts": {
+    "build": "vite build",
+    "dev": "vite build --watch",
+    "smoke": "node scripts/smoke.cjs",
+    "typecheck": "tsc --noEmit",
+    "check": "npm run typecheck && npm run build && npm run smoke",
+    "prepack": "npm run typecheck && npm run build"
+  },
+  "publishConfig": {
+    "access": "public"
+  },
+  "dependencies": {
+    "@opencode/plugin": "2.4.1"
+  },
+  "devDependencies": {
+    "@types/node": "^24",
+    "effect": "4.1.0",
+    "solid-js": "^1.9.0",
+    "typescript": "^5.9.0",
+    "vite": "^7.0.0",
+    "vite-plugin-solid": "^2.11.0"
+  }
+}
