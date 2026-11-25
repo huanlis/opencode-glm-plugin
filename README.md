@@ -3,6 +3,8 @@
 [![npm](https://img.shields.io/npm/v/opencode-glm-plugin)](https://www.npmjs.com/package/opencode-glm-plugin)
 [![license](https://img.shields.io/npm/l/opencode-glm-plugin)](./LICENSE)
 
+源码与 issue：<https://github.com/huanlis/opencode-glm-plugin>
+
 GLM Coding Plan（智谱）额度面板，OpenCode Desktop 插件。
 
 在桌面端 GUI 的右侧边栏添加「GLM 额度」标签页：套餐限额（5 小时窗口 / 周期积分 / 月度工具额度）、是否已限额、今天与最近 7 天 / 30 天用量（Token、调用次数、按模型分解、逐时段趋势图）。另附侧边栏 + 菜单启动项与标题栏用量徽标（悬停显示百分比，点击打开面板）。
