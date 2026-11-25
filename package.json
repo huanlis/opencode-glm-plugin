@@ -4,7 +4,15 @@
   "description": "GLM Coding Plan quota panel for OpenCode Desktop: plan limits, rate-limit status, 7-day and 30-day usage.",
   "type": "module",
   "license": "MIT",
-  "author": "AI码上到",
+  "author": "huanlis",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/huanlis/opencode-glm-plugin.git"
+  },
+  "homepage": "https://github.com/huanlis/opencode-glm-plugin#readme",
+  "bugs": {
+    "url": "https://github.com/huanlis/opencode-glm-plugin/issues"
+  },
   "keywords": [
     "opencode",
     "opencode-plugin",
