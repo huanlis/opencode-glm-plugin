@@ -2,6 +2,7 @@ node_modules/
 .kagent/
 .opencode/opencode.json
 .opencode/opencode.jsonc
+docs/
 *.tgz
 *.log
 .DS_Store
