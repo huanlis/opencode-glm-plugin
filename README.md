@@ -1,5 +1,7 @@
 # opencode-glm-plugin
 
+**简体中文** | [English](https://github.com/huanlis/opencode-glm-plugin/blob/main/README.en.md)
+
 [![npm](https://img.shields.io/npm/v/opencode-glm-plugin)](https://www.npmjs.com/package/opencode-glm-plugin)
 [![license](https://img.shields.io/npm/l/opencode-glm-plugin)](./LICENSE)
 
