@@ -88,6 +88,8 @@ The plugin reloads automatically after its options change; no need to restart th
 - `GET {base}/api/monitor/usage/quota/limit` — plan window limits and reset times
 - `GET {base}/api/monitor/token-usage/usage-detail?startTime=&endTime=&type=&usageType=MODEL` — per-plan usage series (personal `type=1`, team `type=3`), per-model totals and the cache hit rate
 
+The two endpoints number the plans differently: `planType` in the options keeps the quota endpoint's meaning (1 personal / 2 team), and the plugin maps team to `type=3` when it fetches usage; the quota endpoint's `type=2` is the enterprise aggregate on the usage endpoint (main accounts only).
+
 Authentication: `Authorization: <raw key>` (no Bearer prefix).
 
 ## Compatibility

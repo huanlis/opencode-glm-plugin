@@ -88,6 +88,8 @@ API Key 自动从 OpenCode 登录凭据读取（`~/.local/share/opencode/auth.js
 - `GET {base}/api/monitor/usage/quota/limit` — 套餐窗口限额与重置时间
 - `GET {base}/api/monitor/token-usage/usage-detail?startTime=&endTime=&type=&usageType=MODEL` — 按套餐的用量序列（个人 `type=1`，团队 `type=3`）、按模型汇总与缓存命中率
 
+两个接口的 type 编号不同：options 里的 `planType` 沿用额度接口的语义（1 个人 / 2 团队），查用量时插件内部把团队换算成 `type=3`；额度接口的 `type=2` 在用量接口里是企业汇总（只有企业主账号可查）。
+
 鉴权：`Authorization: <裸 key>`（无 Bearer 前缀）。
 
 ## 兼容性
