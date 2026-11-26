@@ -310,7 +310,9 @@ function UsageSection(props: {
       <div class="glmq-card-row">
         <div class="glmq-card-title">{props.title}</div>
         <Show when={has()}>
-          <span class="glmq-gran">{byDay() ? ctx.t("chart.byDay") : ctx.t("chart.byHour")}</span>
+          <span class="glmq-gran">
+            {ctx.t("usage.account")} · {byDay() ? ctx.t("chart.byDay") : ctx.t("chart.byHour")}
+          </span>
         </Show>
       </div>
       <Show

@@ -21,6 +21,7 @@ const en = {
   "usage.tokens": "Tokens",
   "usage.calls": "Calls",
   "usage.models": "By model",
+  "usage.account": "Account-wide",
   "usage.empty": "No usage data",
   "chart.byHour": "Hourly",
   "chart.byDay": "Daily",

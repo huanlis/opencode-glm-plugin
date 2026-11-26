@@ -21,6 +21,7 @@ const zh = {
   "usage.tokens": "Token 用量",
   "usage.calls": "调用次数",
   "usage.models": "按模型",
+  "usage.account": "账号总用量",
   "usage.empty": "暂无用量数据",
   "chart.byHour": "按小时",
   "chart.byDay": "按天",
