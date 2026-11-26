@@ -26,6 +26,42 @@
   font-size: 12px;
 }
 
+/* ---------- page tabs ---------- */
+
+.glmq-tabs {
+  display: flex;
+  align-items: center;
+  gap: 2px;
+  margin-left: auto;
+  min-width: 0;
+}
+
+.glmq-tab {
+  flex: 0 1 auto;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  padding: 3px 9px;
+  border: none;
+  border-radius: 7px;
+  background: none;
+  font-size: 11px;
+  font-weight: 600;
+  color: var(--v2-text-text-muted);
+  cursor: pointer;
+}
+
+.glmq-tab:hover:not(.glmq-tab-active) {
+  background: var(--v2-background-bg-deep);
+  color: var(--v2-text-text-base);
+}
+
+.glmq-tab-active {
+  background: color-mix(in srgb, var(--v2-icon-icon-accent) 14%, transparent);
+  color: var(--v2-icon-icon-accent);
+}
+
 .glmq-level {
   padding: 1px 7px;
   border-radius: 999px;
@@ -96,6 +132,9 @@
 }
 
 .glmq-card-title {
+  display: flex;
+  align-items: center;
+  gap: 6px;
   font-size: 11px;
   font-weight: 620;
   color: var(--v2-text-text-muted);
@@ -151,6 +190,62 @@
   font-size: 11px;
   color: var(--v2-text-text-muted);
   min-height: 1em;
+}
+
+/* ---------- overview donuts ---------- */
+
+.glmq-donuts {
+  display: flex;
+  justify-content: space-around;
+  flex-wrap: wrap;
+  gap: 10px;
+}
+
+.glmq-donut {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 4px;
+  min-width: 0;
+}
+
+.glmq-donut svg {
+  width: 64px;
+  height: 64px;
+}
+
+.glmq-donut-track {
+  fill: none;
+  stroke: var(--v2-background-bg-deep);
+  stroke-width: 7;
+}
+
+.glmq-donut-value {
+  fill: none;
+  stroke-width: 7;
+  stroke-linecap: round;
+  transition: stroke-dasharray 0.3s ease;
+}
+
+.glmq-donut-text {
+  font-size: 13px;
+  font-weight: 620;
+  fill: var(--v2-text-text-base);
+  font-variant-numeric: tabular-nums;
+  dominant-baseline: central;
+}
+
+.glmq-donut-off {
+  opacity: 0.55;
+}
+
+.glmq-donut-name {
+  max-width: 92px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-size: 10px;
+  color: var(--v2-text-text-muted);
 }
 
 /* ---------- usage totals ---------- */
@@ -229,6 +324,23 @@
   display: block;
   color: var(--v2-icon-icon-accent);
   opacity: 0.9;
+}
+
+/* The usage curve: an area fill under a 2px line. `non-scaling-stroke` keeps
+ * the line uniform even though the viewBox stretches (preserveAspectRatio none). */
+.glmq-line {
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 2;
+  stroke-linejoin: round;
+  stroke-linecap: round;
+  vector-effect: non-scaling-stroke;
+}
+
+.glmq-line-fill {
+  fill: currentColor;
+  opacity: 0.12;
+  stroke: none;
 }
 
 .glmq-xlabels {

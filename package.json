@@ -1,6 +1,6 @@
 {
   "name": "opencode-glm-plugin",
-  "version": "1.0.0",
+  "version": "1.1.0",
   "description": "GLM Coding Plan quota panel for OpenCode Desktop: plan limits, rate-limit status, 7-day and 30-day usage.",
   "type": "module",
   "license": "MIT",

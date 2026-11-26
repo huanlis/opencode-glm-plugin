@@ -7,7 +7,9 @@
 
 GLM Coding Plan（智谱）额度面板，OpenCode Desktop 插件。
 
-在桌面端 GUI 的右侧边栏添加「GLM 额度」标签页：套餐限额（5 小时窗口 / 周期积分 / 月度工具额度）、是否已限额、今天与最近 7 天 / 30 天用量（Token、调用次数、按模型分解、逐时段趋势图）。另附侧边栏 + 菜单启动项与标题栏用量徽标（悬停显示百分比，点击打开面板）。
+在桌面端 GUI 的右侧边栏添加「GLM 额度」标签页：顶部「总览 / 个人套餐 / 团队套餐」页签切换，总览用环形图与曲线图展示各套餐进度和用量趋势；每个套餐有独立页面，含限额进度条、重置倒计时、今天与最近 7 天 / 30 天用量（Token、调用次数、按模型分解）。另附侧边栏 + 菜单启动项与标题栏用量徽标（悬停显示各套餐百分比，点击打开面板）。
+
+![GLM 额度面板：总览 / 个人套餐 / 团队套餐](https://raw.githubusercontent.com/huanlis/opencode-glm-plugin/main/docs/asserts/panel-tabs.png)
 
 ## 安装
 
@@ -51,6 +53,31 @@ API Key 自动从 OpenCode 登录凭据读取（`~/.local/share/opencode/auth.js
 ```
 
 `planType`：新版积分套餐查询参数（1 个人 / 2 团队）。若面板提示「服务端未返回额度数据」，请到 bigmodel.cn 控制台（DevTools 里 `quota/limit` 请求）抄下 `bigmodel-organization` / `bigmodel-project` 头与 `type` 参数填入。
+
+### 多套餐
+
+账号下同时有个人套餐和团队套餐时，插件会自动把它们都查出来分组显示：用当前配置分别请求 `type=1` 和 `type=2`（以及已配置的 `planType`，它排最前），返回空的结果自动忽略，同一个套餐只显示一份。团队套餐需要上面那组 `organization` / `project`，个人套餐无需额外配置。
+
+`organization` 填控制台里的「组织ID」，`project` 填团队项目的「项目ID」，都在[组织管理页](https://bigmodel.cn/usercenter/proj-mgmt/org-mgmt)查看（页面左上角先切换到团队所在组织）：
+
+![在控制台组织管理页查看组织ID与项目ID](https://raw.githubusercontent.com/huanlis/opencode-glm-plugin/main/docs/asserts/org-mgmt.png)
+
+需要精确控制时（多个团队、自定义名称、只看某个套餐），用 `plans` 数组显式列出，写了它就不再自动发现：
+
+```json
+{
+  "options": {
+    "plans": [
+      { "label": "个人", "planType": 1 },
+      { "label": "团队", "planType": 2, "organization": "org-xxx", "project": "proj_xxx" }
+    ]
+  }
+}
+```
+
+每项可写 `label` / `planType` / `organization` / `project`，未写的字段继承顶层 options；列表严格按条目查询，空或失败的套餐也会显示出来方便排查。
+
+注意：用量（今天 / 7 天 / 30 天）是账号总用量，接口不区分套餐，所有套餐共用一份。
 
 修改 options 后插件会自动重载，不需要重启应用。
 

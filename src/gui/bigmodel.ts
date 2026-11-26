@@ -7,14 +7,24 @@ import path from "node:path"
  * Runs only in the desktop app's main process: plain Node fetch, no CORS.
  */
 
+/** One entry of `options.plans`; unset fields inherit the entry's top-level value. */
+export interface PlanOptions {
+  readonly label?: string
+  /** Plan type query for reformed credit plans: 1 personal, 2 team. */
+  readonly planType?: number
+  readonly organization?: string
+  readonly project?: string
+}
+
 /** Options a user may set on the plugin entry in `opencode.json`. */
 export interface GlmOptions {
   readonly apiKey?: string
   readonly baseUrl?: string
   readonly organization?: string
   readonly project?: string
-  /** Plan type query for reformed credit plans: 1 personal, 2 team. */
   readonly planType?: number
+  /** Explicit plan list; when set, only these plans are queried (no auto discovery). */
+  readonly plans?: readonly PlanOptions[]
 }
 
 export interface GlmConfig {
@@ -53,12 +63,26 @@ export interface UsageRange {
 
 export type SnapshotStatus = "ok" | "no-key" | "error" | "empty"
 
+/** One plan's quota result inside a snapshot. */
+export interface PlanQuota {
+  readonly label?: string
+  /** The effective plan type after inheritance, `undefined` for a no-type query. */
+  readonly planType?: number
+  readonly status: "ok" | "empty" | "error"
+  readonly message?: string
+  /** Extra guidance the panel renders for an `empty` plan (new credit plans). */
+  readonly hint?: "org-project"
+  readonly level?: string
+  readonly limits: readonly QuotaLimit[]
+}
+
 export interface Snapshot {
   readonly status: SnapshotStatus
   readonly message?: string
   /** Extra guidance the panel renders for `empty` (new credit plans) states. */
   readonly hint?: "org-project"
-  readonly level?: string
+  readonly plans: readonly PlanQuota[]
+  /** Every ok plan's limits, flattened for the single-plan consumers. */
   readonly limits: readonly QuotaLimit[]
   readonly usageToday?: UsageRange
   readonly usage7d?: UsageRange
@@ -78,12 +102,22 @@ export function readOptions(raw: unknown): GlmOptions {
   const o = raw as Record<string, unknown>
   const str = (v: unknown) => (typeof v === "string" && v.trim() ? v.trim() : undefined)
   const num = (v: unknown) => (typeof v === "number" && Number.isFinite(v) ? v : undefined)
+  const plans = Array.isArray(o.plans)
+    ? o.plans
+        .map((entry): PlanOptions | undefined => {
+          if (!entry || typeof entry !== "object") return undefined
+          const p = entry as Record<string, unknown>
+          return { label: str(p.label), planType: num(p.planType), organization: str(p.organization), project: str(p.project) }
+        })
+        .filter((plan): plan is PlanOptions => plan !== undefined)
+    : undefined
   return {
     apiKey: str(o.apiKey),
     baseUrl: str(o.baseUrl),
     organization: str(o.organization),
     project: str(o.project),
     planType: num(o.planType),
+    plans: plans && plans.length > 0 ? plans : undefined,
   }
 }
 
@@ -153,6 +187,39 @@ function readAuthKey(): { key: string; provider: string } | undefined {
   return undefined
 }
 
+/** A plan to query: `explicit` ones stay in the snapshot even when empty or failed. */
+interface PlanQuery {
+  readonly label?: string
+  readonly planType?: number
+  readonly organization?: string
+  readonly project?: string
+  readonly explicit: boolean
+}
+
+/**
+ * Plans to fetch. An explicit `plans` list wins; otherwise auto-discovery asks
+ * for the configured type first, then both standard types, and — only when no
+ * type is configured — one parameter-less request as a fallback for servers
+ * that reject the parameter.
+ */
+function planQueries(options: GlmOptions): PlanQuery[] {
+  if (options.plans) return options.plans.map((plan) => ({ ...plan, explicit: true }))
+  const types: (number | undefined)[] = [1, 2]
+  if (options.planType !== undefined && options.planType !== 1 && options.planType !== 2) types.unshift(options.planType)
+  // A parameter-less request only as a fallback, behind the typed ones, so a
+  // typed result wins the dedup and the plan keeps its personal/team name.
+  if (options.planType === undefined) types.push(undefined)
+  const seen = new Set<string>()
+  const queries: PlanQuery[] = []
+  for (const planType of types) {
+    const key = planType === undefined ? "none" : String(planType)
+    if (seen.has(key)) continue
+    seen.add(key)
+    queries.push({ planType, explicit: planType !== undefined && planType === options.planType })
+  }
+  return queries
+}
+
 class EmptyQuotaError extends Error {
   constructor() {
     super("no quota limits in response")
@@ -190,7 +257,7 @@ async function getJson(config: GlmConfig, url: string): Promise<unknown> {
 }
 
 /** `/api/monitor/usage/quota/limit`: every window the plan meters. */
-async function fetchQuota(config: GlmConfig): Promise<{ level?: string; limits: QuotaLimit[] }> {
+async function fetchQuota(config: GlmConfig): Promise<{ level?: string; limits: QuotaLimit[]; fingerprint: string }> {
   const query = config.planType === undefined ? "" : `?type=${config.planType}`
   const data = (await getJson(config, `${config.baseUrl}/api/monitor/usage/quota/limit${query}`)) as
     | { level?: string; limits?: unknown }
@@ -200,7 +267,14 @@ async function fetchQuota(config: GlmConfig): Promise<{ level?: string; limits: 
   if (raw.length === 0) throw new EmptyQuotaError()
 
   const limits = raw.map((entry, index) => toLimit(entry, index))
-  return { level: typeof data?.level === "string" ? data.level : undefined, limits }
+  const level = typeof data?.level === "string" ? data.level : undefined
+  // The plan's identity: reset times drift a few milliseconds between calls,
+  // so dedup judges on the structure (tier + window kinds) instead.
+  const fingerprint = `${level ?? "-"}|${raw
+    .map((entry) => `${String(entry.type)}|${String(entry.unit)}|${String(entry.number)}`)
+    .sort()
+    .join(",")}`
+  return { level, limits, fingerprint }
 }
 
 function toLimit(entry: Record<string, unknown>, index: number): QuotaLimit {
@@ -246,6 +320,11 @@ async function fetchToday(config: GlmConfig): Promise<UsageRange> {
   return fetchUsageBetween(config, start, end, 0)
 }
 
+/**
+ * Usage is account-wide: the endpoint ignores the organization/project headers
+ * and rejects a `type` parameter with an empty body, so it is fetched once and
+ * shared by every plan.
+ */
 async function fetchUsageBetween(config: GlmConfig, start: Date, end: Date, downsampleMax: number): Promise<UsageRange> {
   const query = `startTime=${encodeURIComponent(formatLocal(start))}&endTime=${encodeURIComponent(formatLocal(end))}`
   const data = (await getJson(config, `${config.baseUrl}/api/monitor/usage/model-usage?${query}`)) as
@@ -294,35 +373,93 @@ function downsample(buckets: UsageBucket[], max: number): UsageBucket[] {
   return merged
 }
 
+/** One plan's quota fetch; failures become a per-plan status, never a throw. */
+async function fetchPlanQuota(config: GlmConfig, query: PlanQuery): Promise<{ plan: PlanQuota; fingerprint?: string }> {
+  const planConfig: GlmConfig = {
+    baseUrl: config.baseUrl,
+    apiKey: config.apiKey,
+    organization: query.organization ?? config.organization,
+    project: query.project ?? config.project,
+    planType: query.planType ?? config.planType,
+  }
+  try {
+    const quota = await fetchQuota(planConfig)
+    return {
+      fingerprint: quota.fingerprint,
+      plan: {
+        label: query.label,
+        planType: planConfig.planType,
+        status: "ok",
+        level: quota.level,
+        limits: quota.limits,
+      },
+    }
+  } catch (cause) {
+    const empty = cause instanceof EmptyQuotaError
+    return {
+      plan: {
+        label: query.label,
+        planType: planConfig.planType,
+        status: empty ? "empty" : "error",
+        message: empty ? undefined : cause instanceof Error ? cause.message : String(cause),
+        hint: empty ? "org-project" : undefined,
+        limits: [],
+      },
+    }
+  }
+}
+
 /** Fetches everything the panel shows. Never rejects: failures become a status. */
 export async function fetchSnapshot(rawOptions: unknown): Promise<Snapshot> {
   const options = readOptions(rawOptions)
   const fetchedAt = Date.now()
   try {
     const config = resolveConfig(options)
-    if ("error" in config)
-      return { status: "no-key", limits: [], fetchedAt }
+    if ("error" in config) return { status: "no-key", plans: [], limits: [], fetchedAt }
 
-    const [quota, usageToday, usage7d, usage30d] = await Promise.all([
-      fetchQuota(config),
+    const queries = planQueries(options)
+    const [results, usageToday, usage7d, usage30d] = await Promise.all([
+      Promise.all(queries.map((query) => fetchPlanQuota(config, query))),
       fetchToday(config).catch(() => undefined),
       fetchUsage(config, 7).catch(() => undefined),
       fetchUsage(config, 30).catch(() => undefined),
     ])
 
+    // The same plan often answers for several type values; keep the first hit.
+    // Only auto discovery dedupes — an explicit `plans` list is taken as-is.
+    const seen = options.plans ? undefined : new Set<string>()
+    const anyOk = results.some((result) => result.plan.status === "ok")
+    const plans = results
+      .filter((result, index) => {
+        if (seen) {
+          const fingerprint = result.fingerprint
+          if (fingerprint) {
+            if (seen.has(fingerprint)) return false
+            seen.add(fingerprint)
+          }
+        }
+        const query = queries[index]!
+        return query.explicit || result.plan.status === "ok" || (!anyOk && result.plan.status === "error")
+      })
+      .map((result) => result.plan)
+
+    const okPlans = plans.filter((plan) => plan.status === "ok")
+    const status: SnapshotStatus =
+      okPlans.length > 0 ? "ok" : plans.some((plan) => plan.status === "error") ? "error" : "empty"
+
     return {
-      status: "ok",
-      level: quota.level,
-      limits: quota.limits,
+      status,
+      message: status === "error" ? plans.find((plan) => plan.status === "error")?.message : undefined,
+      hint: status === "empty" ? "org-project" : undefined,
+      plans,
+      limits: okPlans.flatMap((plan) => plan.limits),
       usageToday,
       usage7d,
       usage30d,
       fetchedAt,
     }
   } catch (cause) {
-    if (cause instanceof EmptyQuotaError)
-      return { status: "empty", hint: "org-project", limits: [], fetchedAt }
     const message = cause instanceof Error ? cause.message : String(cause)
-    return { status: "error", message, limits: [], fetchedAt }
+    return { status: "error", message, plans: [], limits: [], fetchedAt }
   }
 }

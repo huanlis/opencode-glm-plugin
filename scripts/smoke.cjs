@@ -97,11 +97,18 @@ async function testMain() {
   const cleanup = plugin.main(ctx)
   console.log("main returned cleanup:", typeof cleanup)
   const snap = await provided.snapshot()
-  console.log("snapshot status:", snap.status, "| level:", snap.level)
-  console.log(
-    "limits:",
-    snap.limits.map((l) => `${l.kind}=${l.percentage === undefined ? "?" : Math.round(l.percentage) + "%"}${l.nextResetTime ? " reset@" + new Date(l.nextResetTime).toISOString() : ""}`).join(" | "),
-  )
+  console.log("snapshot status:", snap.status, "| plans:", (snap.plans ?? []).length)
+  for (const plan of snap.plans ?? []) {
+    console.log(
+      `plan type=${plan.planType ?? "none"} [${plan.status}]${plan.level ? " level=" + plan.level : ""}${plan.message ? " msg=" + plan.message : ""}`,
+    )
+    console.log(
+      "  limits:",
+      plan.limits
+        .map((l) => `${l.kind}=${l.percentage === undefined ? "?" : Math.round(l.percentage) + "%"}${l.nextResetTime ? " reset@" + new Date(l.nextResetTime).toISOString() : ""}`)
+        .join(" | ") || "(none)",
+    )
+  }
   for (const [label, range] of [["today", snap.usageToday], ["7d", snap.usage7d], ["30d", snap.usage30d]]) {
     if (!range) {
       console.log(`usage ${label}: unavailable`)
@@ -118,7 +125,18 @@ async function testMain() {
 // ---- Fake window setup flow ----
 function testSetup() {
   const contributions = []
-  const ipc = { snapshot: async () => ({ status: "ok", limits: [], fetchedAt: Date.now() }), refresh: async () => ({}) }
+  const ipc = {
+    snapshot: async () => ({
+      status: "ok",
+      plans: [
+        { status: "ok", planType: 1, level: "lite", limits: [{ id: "t", kind: "tokens-5h", percentage: 12 }] },
+        { status: "ok", planType: 2, level: "pro", limits: [{ id: "c", kind: "credit-5h", percentage: 34 }] },
+      ],
+      limits: [],
+      fetchedAt: Date.now(),
+    }),
+    refresh: async () => ({}),
+  }
   const fakeSession = { id: "ses_test", server: { id: "sidecar" } }
   const ctx = {
     id: "opencode-glm-plugin",

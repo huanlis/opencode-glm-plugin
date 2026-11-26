@@ -1,11 +1,20 @@
 import { For, Show, createSignal, onCleanup, onMount } from "solid-js"
 import { usePlugin } from "@opencode/plugin/gui"
 import type { definition } from "./definition"
-import type { QuotaLimit, UsageBucket, UsageRange } from "./bigmodel"
+import type { PlanQuota, QuotaLimit, Snapshot, UsageBucket, UsageRange } from "./bigmodel"
 import { quotaState } from "./state"
-import { PANEL_WIDTH, formatCountdown, formatTokens, isLimited, tierColor, tierOf } from "./view"
+import {
+  PANEL_WIDTH,
+  formatCountdown,
+  formatTokens,
+  isLimitedOf,
+  planTitle,
+  primaryPercentageOf,
+  tierColor,
+  tierOf,
+} from "./view"
 
-/** The right-side "GLM 额度" panel: plan limits, limit status, 7/30-day usage. */
+/** The right-side "GLM 额度" panel: an overview plus one full page per plan. */
 
 const STALE_MS = 60_000
 
@@ -33,18 +42,39 @@ export function QuotaPanel() {
     if (!snap || Date.now() - snap.fetchedAt > STALE_MS) quotaState.pull(true)
   })
 
+  /** 0 = overview, 1..n = the plan at that index; out of range falls back to the overview. */
+  const [tab, setTab] = createSignal(0)
   const snapshot = () => quotaState.snapshot()
-  const limited = () => isLimited(snapshot())
+  const plans = () => snapshot()?.plans ?? []
+  const selected = () => (tab() >= 1 ? plans()[tab() - 1] : undefined)
 
   return (
     <div class="glmq">
       <header class="glmq-head">
         <span class="glmq-title">{ctx.t("panel.title")}</span>
-        <Show when={snapshot()?.level}>
-          <span class="glmq-level">{snapshot()!.level}</span>
-        </Show>
-        <Show when={limited()}>
-          <span class="glmq-flag">{ctx.t("state.limited")}</span>
+        <Show when={snapshot()?.status === "ok"}>
+          <div class="glmq-tabs">
+            <button
+              type="button"
+              class="glmq-tab"
+              classList={{ "glmq-tab-active": tab() === 0 }}
+              onClick={() => setTab(0)}
+            >
+              {ctx.t("tab.overview")}
+            </button>
+            <For each={plans()}>
+              {(plan, index) => (
+                <button
+                  type="button"
+                  class="glmq-tab"
+                  classList={{ "glmq-tab-active": tab() === index() + 1 }}
+                  onClick={() => setTab(index() + 1)}
+                >
+                  {planTitle(ctx.t, plan)}
+                </button>
+              )}
+            </For>
+          </div>
         </Show>
         <button
           type="button"
@@ -61,28 +91,52 @@ export function QuotaPanel() {
       <Show when={snapshot()} fallback={<StatusCard kind="loading" />}>
         {(snap) => (
           <Show when={snap().status === "ok"} fallback={<StatusCard kind={snap().status} message={snap().message} />}>
-            <div class="glmq-body">
-              <section class="glmq-card">
-                <div class="glmq-card-title">{ctx.t("section.quota")}</div>
-                <For each={snap().limits}>{(limit) => <LimitRow limit={limit} now={now()} zh={zh()} />}</For>
-              </section>
-
-              <UsageSection
-                title={ctx.t("section.today")}
-                range={snap().usageToday}
-                zh={zh()}
-                chart={{ minSpan: 24, hourTicks: true }}
-              />
-              <UsageSection title={ctx.t("section.7d")} range={snap().usage7d} zh={zh()} />
-              <UsageSection title={ctx.t("section.30d")} range={snap().usage30d} zh={zh()} />
-
-              <footer class="glmq-foot">
-                {ctx.t("foot.updated", { time: formatClock(snap().fetchedAt) })} · {ctx.t("foot.auto")}
-              </footer>
-            </div>
+            <Show
+              when={selected()}
+              fallback={<OverviewPage snapshot={snap()} now={now()} zh={zh()} />}
+            >
+              {(plan) => (
+                <div class="glmq-body">
+                  <PlanCard plan={plan()} now={now()} zh={zh()} />
+                  <UsageSection
+                    title={ctx.t("section.today")}
+                    range={snap().usageToday}
+                    zh={zh()}
+                    chart={{ minSpan: 24, hourTicks: true }}
+                  />
+                  <UsageSection title={ctx.t("section.7d")} range={snap().usage7d} zh={zh()} />
+                  <UsageSection title={ctx.t("section.30d")} range={snap().usage30d} zh={zh()} />
+                  <Foot at={snap().fetchedAt} />
+                </div>
+              )}
+            </Show>
           </Show>
         )}
       </Show>
+    </div>
+  )
+}
+
+/** The default page: a donut per plan plus today's and the week's usage curves. */
+function OverviewPage(props: { snapshot: Snapshot; now: number; zh: boolean }) {
+  const ctx = usePlugin<typeof definition>()
+  return (
+    <div class="glmq-body">
+      <section class="glmq-card">
+        <div class="glmq-card-title">{ctx.t("section.quota")}</div>
+        <div class="glmq-donuts">
+          <For each={props.snapshot.plans}>{(plan) => <Donut plan={plan} />}</For>
+        </div>
+      </section>
+      <UsageSection
+        title={ctx.t("section.today")}
+        range={props.snapshot.usageToday}
+        zh={props.zh}
+        chart={{ minSpan: 24, hourTicks: true }}
+        models={false}
+      />
+      <UsageSection title={ctx.t("section.7d")} range={props.snapshot.usage7d} zh={props.zh} models={false} />
+      <Foot at={props.snapshot.fetchedAt} />
     </div>
   )
 }
@@ -111,6 +165,81 @@ function StatusCard(props: { kind: string; message?: string }) {
           <div class="glmq-status-detail">{hint()}</div>
         </Show>
       </div>
+    </div>
+  )
+}
+
+/** One plan's card: its name and tier, its limit rows, or its fetch status. */
+function PlanCard(props: { plan: PlanQuota; now: number; zh: boolean }) {
+  const ctx = usePlugin<typeof definition>()
+  return (
+    <section class="glmq-card">
+      <div class="glmq-card-row">
+        <div class="glmq-card-title">
+          {planTitle(ctx.t, props.plan)}
+          <Show when={props.plan.level}>
+            <span class="glmq-level">{props.plan.level}</span>
+          </Show>
+          <Show when={isLimitedOf(props.plan)}>
+            <span class="glmq-flag">{ctx.t("state.limited")}</span>
+          </Show>
+        </div>
+      </div>
+      <Show when={props.plan.status === "ok"} fallback={<PlanStatus plan={props.plan} />}>
+        <For each={props.plan.limits}>{(limit) => <LimitRow limit={limit} now={props.now} zh={props.zh} />}</For>
+      </Show>
+    </section>
+  )
+}
+
+/** The per-plan error or empty note, inside its own card. */
+function PlanStatus(props: { plan: PlanQuota }) {
+  const ctx = usePlugin<typeof definition>()
+  return (
+    <div class="glmq-status" classList={{ "glmq-status-error": props.plan.status === "error" }}>
+      <div class="glmq-status-title">{props.plan.status === "empty" ? ctx.t("state.empty") : ctx.t("state.error")}</div>
+      <Show when={props.plan.message}>
+        <div class="glmq-status-detail">{props.plan.message}</div>
+      </Show>
+      <Show when={props.plan.hint}>
+        <div class="glmq-status-detail">{ctx.t("state.emptyHint")}</div>
+      </Show>
+    </div>
+  )
+}
+
+/** A donut ring per plan, showing its headline percentage with the tier color. */
+function Donut(props: { plan: PlanQuota }) {
+  const ctx = usePlugin<typeof definition>()
+  const pct = () => primaryPercentageOf(props.plan)
+  const color = () => tierColor(tierOf(pct())) ?? "var(--v2-icon-icon-accent)"
+  const radius = 24
+  const circumference = 2 * Math.PI * radius
+  const dash = () => {
+    const value = Math.min(100, Math.max(0, pct() ?? 0))
+    return `${((value / 100) * circumference).toFixed(2)} ${circumference.toFixed(2)}`
+  }
+  return (
+    <div class="glmq-donut" classList={{ "glmq-donut-off": props.plan.status !== "ok" }}>
+      <svg
+        viewBox="0 0 64 64"
+        role="img"
+        aria-label={`${planTitle(ctx.t, props.plan)} ${pct() !== undefined ? `${Math.round(pct()!)}%` : ""}`}
+      >
+        <circle class="glmq-donut-track" cx="32" cy="32" r={radius} />
+        <circle
+          class="glmq-donut-value"
+          cx="32"
+          cy="32"
+          r={radius}
+          style={{ stroke: color(), "stroke-dasharray": dash() }}
+          transform="rotate(-90 32 32)"
+        />
+        <text class="glmq-donut-text" x="32" y="32">
+          {pct() !== undefined ? `${Math.round(pct()!)}%` : "—"}
+        </text>
+      </svg>
+      <span class="glmq-donut-name">{planTitle(ctx.t, props.plan)}</span>
     </div>
   )
 }
@@ -168,10 +297,13 @@ function UsageSection(props: {
   range: UsageRange | undefined
   zh: boolean
   chart?: { minSpan?: number; hourTicks?: boolean }
+  /** Omit the per-model breakdown, e.g. on the compact overview. */
+  models?: boolean
 }) {
   const ctx = usePlugin<typeof definition>()
   const has = () => !!props.range && (props.range.totalTokens > 0 || props.range.totalCalls > 0)
   const byDay = () => props.range?.granularity === "daily"
+  const showModels = () => props.models !== false
   return (
     <section class="glmq-card">
       <div class="glmq-card-row">
@@ -195,7 +327,7 @@ function UsageSection(props: {
           </div>
         </div>
         <Chart buckets={props.range!.buckets} zh={props.zh} span={props.chart} />
-        <Show when={props.range!.models.length > 0}>
+        <Show when={showModels() && props.range!.models.length > 0}>
           <div class="glmq-models">
             <div class="glmq-models-title">{ctx.t("usage.models")}</div>
             <For each={props.range!.models.slice(0, 5)}>
@@ -211,8 +343,9 @@ function UsageSection(props: {
 }
 
 /**
- * Bars with axes: horizontal gridlines carry y tick labels (peak, mid, 0), the
- * row under the plot carries x time ticks, so the magnitude is readable.
+ * A line chart with axes: horizontal gridlines carry y tick labels (peak, mid,
+ * 0), the row under the plot carries x time ticks. Buckets draw as a smooth
+ * area curve; a lone bucket falls back to a single bar.
  */
 function Chart(props: {
   buckets: readonly UsageBucket[]
@@ -222,6 +355,34 @@ function Chart(props: {
   const count = () => props.buckets.length
   const max = () => Math.max(1, ...props.buckets.map((bucket) => bucket.tokens))
   const viewWidth = () => Math.max(count(), props.span?.minSpan ?? 1)
+
+  /** Slot centers and heights, in the same 0-100 scale the bars used. */
+  const points = () =>
+    props.buckets.map((bucket, index) => ({
+      x: index + 0.5,
+      y: 100 - Math.max(bucket.tokens > 0 ? 1.5 : 0, (bucket.tokens / max()) * 97),
+    }))
+
+  /** Cubic segments whose controls sit at the horizontal midpoints: a smooth
+   * curve that never overshoots the data points. */
+  const linePath = () => {
+    const pts = points()
+    if (pts.length < 2) return ""
+    let d = `M ${pts[0]!.x.toFixed(2)} ${pts[0]!.y.toFixed(2)}`
+    for (let i = 1; i < pts.length; i++) {
+      const prev = pts[i - 1]!
+      const cur = pts[i]!
+      const midX = ((prev.x + cur.x) / 2).toFixed(2)
+      d += ` C ${midX} ${prev.y.toFixed(2)}, ${midX} ${cur.y.toFixed(2)}, ${cur.x.toFixed(2)} ${cur.y.toFixed(2)}`
+    }
+    return d
+  }
+
+  const areaPath = () => {
+    const pts = points()
+    if (pts.length < 2) return ""
+    return `${linePath()} L ${pts[pts.length - 1]!.x.toFixed(2)} 100 L ${pts[0]!.x.toFixed(2)} 100 Z`
+  }
 
   const yTicks = () => [
     { top: "0%", label: formatTokens(max(), props.zh) },
@@ -257,15 +418,32 @@ function Chart(props: {
             {(tick) => <span class="glmq-gridline" style={{ top: tick.top }} />}
           </For>
           <svg class="glmq-bars" viewBox={`0 0 ${viewWidth()} 100`} preserveAspectRatio="none" aria-hidden="true">
-            <For each={props.buckets}>
-              {(bucket, index) => {
-                const height = () => Math.max(bucket.tokens > 0 ? 1.5 : 0, (bucket.tokens / max()) * 97)
-                return (
-                  <rect x={index() + 0.09} y={100 - height()} width={0.82} height={height()} rx={0.25} fill="currentColor">
-                    <title>{`${bucket.time} · ${formatTokens(bucket.tokens, props.zh)}`}</title>
+            <Show
+              when={count() >= 2}
+              fallback={
+                <Show when={count() === 1}>
+                  <rect
+                    x={points()[0]!.x - 0.41}
+                    y={points()[0]!.y}
+                    width={0.82}
+                    height={100 - points()[0]!.y}
+                    rx={0.25}
+                    fill="currentColor"
+                  >
+                    <title>{`${props.buckets[0]!.time} · ${formatTokens(props.buckets[0]!.tokens, props.zh)}`}</title>
                   </rect>
-                )
-              }}
+                </Show>
+              }
+            >
+              <path class="glmq-line-fill" d={areaPath()} />
+              <path class="glmq-line" d={linePath()} />
+            </Show>
+            <For each={props.buckets}>
+              {(bucket, index) => (
+                <rect x={index()} y="0" width="1" height="100" fill="transparent">
+                  <title>{`${bucket.time} · ${formatTokens(bucket.tokens, props.zh)}`}</title>
+                </rect>
+              )}
             </For>
           </svg>
         </div>
@@ -300,6 +478,15 @@ function ModelRow(props: { name: string; tokens: number; total: number; zh: bool
         <span class="glmq-model-fill" style={{ width: `${fill()}%` }} />
       </span>
     </div>
+  )
+}
+
+function Foot(props: { at: number }) {
+  const ctx = usePlugin<typeof definition>()
+  return (
+    <footer class="glmq-foot">
+      {ctx.t("foot.updated", { time: formatClock(props.at) })} · {ctx.t("foot.auto")}
+    </footer>
   )
 }
 

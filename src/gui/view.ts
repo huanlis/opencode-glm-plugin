@@ -1,4 +1,4 @@
-import type { QuotaLimit, Snapshot, UsageRange } from "./bigmodel"
+import type { PlanQuota, QuotaLimit, Snapshot, UsageRange } from "./bigmodel"
 
 /** Pure view helpers shared by the window shell and the panel. */
 
@@ -23,24 +23,55 @@ export function tierColor(tier: Tier | undefined): string | undefined {
   return undefined
 }
 
-/**
- * The headline percentage: the first limit that reports one, preferring the
- * 5-hour token window, then credit windows, then anything else.
- */
-export function primaryPercentage(snapshot: Snapshot | undefined): number | undefined {
-  if (!snapshot || snapshot.status !== "ok") return undefined
-  const order: QuotaLimit["kind"][] = ["tokens-5h", "credit-5h", "credit-week", "credit-month", "time-month", "other"]
-  for (const kind of order) {
-    const limit = snapshot.limits.find((entry) => entry.kind === kind)
-    if (limit?.percentage !== undefined) return limit.percentage
-  }
-  return snapshot.limits.find((limit) => limit.percentage !== undefined)?.percentage
+/** Translation function narrowed to the plan-name keys; `ctx.t` fits it. */
+type PlanTitleT = (key: "plan.personal" | "plan.team" | "plan.unnamed") => string
+
+/** The card title of a plan: the user's `label` wins, else a name from its type. */
+export function planTitle(t: PlanTitleT, plan: PlanQuota): string {
+  return plan.label ?? t(plan.planType === 1 ? "plan.personal" : plan.planType === 2 ? "plan.team" : "plan.unnamed")
 }
 
-/** Whether any limit has run out. */
-export function isLimited(snapshot: Snapshot | undefined): boolean {
-  if (!snapshot) return false
-  return snapshot.limits.some((limit) => (limit.percentage ?? 0) >= 100)
+/** Translation function narrowed to the short plan-name keys. */
+type PlanTagT = (key: "plan.tagPersonal" | "plan.tagTeam" | "plan.tagOther") => string
+
+/** The short name for the pill and menu, resolved like `planTitle`. */
+export function planTag(t: PlanTagT, plan: PlanQuota): string {
+  return plan.label ?? t(plan.planType === 1 ? "plan.tagPersonal" : plan.planType === 2 ? "plan.tagTeam" : "plan.tagOther")
+}
+
+/** One ok plan plus its headline percentage. */
+export interface PlanHeadline {
+  readonly plan: PlanQuota
+  readonly percentage: number
+}
+
+/** Headlines for the pill and the + menu: one entry per ok plan, in snapshot order. */
+export function planHeadlines(snapshot: Snapshot | undefined): PlanHeadline[] {
+  const headlines: PlanHeadline[] = []
+  for (const plan of snapshot?.plans ?? []) {
+    const percentage = primaryPercentageOf(plan)
+    if (percentage !== undefined) headlines.push({ plan, percentage })
+  }
+  return headlines
+}
+
+/**
+ * A plan's headline percentage: the first limit that reports one, preferring
+ * the 5-hour window, then credit windows, then anything else.
+ */
+export function primaryPercentageOf(plan: PlanQuota | undefined): number | undefined {
+  if (!plan || plan.status !== "ok") return undefined
+  const order: QuotaLimit["kind"][] = ["tokens-5h", "credit-5h", "credit-week", "credit-month", "time-month", "other"]
+  for (const kind of order) {
+    const limit = plan.limits.find((entry) => entry.kind === kind)
+    if (limit?.percentage !== undefined) return limit.percentage
+  }
+  return plan.limits.find((limit) => limit.percentage !== undefined)?.percentage
+}
+
+/** Whether a plan has run out of any window. */
+export function isLimitedOf(plan: PlanQuota): boolean {
+  return plan.limits.some((limit) => (limit.percentage ?? 0) >= 100)
 }
 
 /** Humanizes token counts per locale: 万/亿 for zh, K/M/B otherwise. */
