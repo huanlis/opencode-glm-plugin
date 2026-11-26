@@ -219,7 +219,7 @@
 
 .glmq-donut-track {
   fill: none;
-  stroke: var(--v2-background-bg-deep);
+  stroke: var(--v2-border-border-muted, #e4e4e4);
   stroke-width: 7;
 }
 
@@ -231,6 +231,7 @@
 }
 
 .glmq-donut-text {
+  text-anchor: middle;
   font-size: 13px;
   font-weight: 620;
   fill: var(--v2-text-text-base);
