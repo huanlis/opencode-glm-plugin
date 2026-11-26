@@ -8,6 +8,7 @@ import {
   formatCountdown,
   formatTokens,
   isLimitedOf,
+  planTabName,
   planTitle,
   primaryPercentageOf,
   tierColor,
@@ -70,7 +71,7 @@ export function QuotaPanel() {
                   classList={{ "glmq-tab-active": tab() === index() + 1 }}
                   onClick={() => setTab(index() + 1)}
                 >
-                  {planTitle(ctx.t, plan)}
+                  {planTabName(ctx.t, plan)}
                 </button>
               )}
             </For>

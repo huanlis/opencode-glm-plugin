@@ -10,6 +10,8 @@ const en = {
   "section.7d": "Last 7 days",
   "section.30d": "Last 30 days",
   "tab.overview": "Overview",
+  "tab.personal": "Personal",
+  "tab.team": "Team",
   "plan.personal": "Personal plan",
   "plan.team": "Team plan",
   "plan.unnamed": "Plan",

@@ -10,6 +10,8 @@ const zh = {
   "section.7d": "最近 7 天",
   "section.30d": "最近 30 天",
   "tab.overview": "总览",
+  "tab.personal": "个人套餐",
+  "tab.team": "团队套餐",
   "plan.personal": "个人套餐",
   "plan.team": "团队套餐",
   "plan.unnamed": "套餐",

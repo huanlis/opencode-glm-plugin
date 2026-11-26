@@ -39,6 +39,18 @@ export function planTag(t: PlanTagT, plan: PlanQuota): string {
   return plan.label ?? t(plan.planType === 1 ? "plan.tagPersonal" : plan.planType === 2 ? "plan.tagTeam" : "plan.tagOther")
 }
 
+/** Translation function narrowed to the tab-name keys. */
+type PlanTabT = (key: "tab.personal" | "tab.team" | "plan.tagOther") => string
+
+/**
+ * The tab label of a plan: the user's `label`, else a name short enough for
+ * the header row (English drops the "plan" word the card title keeps).
+ */
+export function planTabName(t: PlanTabT, plan: PlanQuota): string {
+  if (plan.label) return plan.label
+  return t(plan.planType === 1 ? "tab.personal" : plan.planType === 2 ? "tab.team" : "plan.tagOther")
+}
+
 /** One ok plan plus its headline percentage. */
 export interface PlanHeadline {
   readonly plan: PlanQuota

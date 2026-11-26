@@ -11,7 +11,7 @@ A quota panel for the GLM Coding Plan (Zhipu AI), as an OpenCode Desktop plugin.
 
 It adds a **GLM Quota** tab to the right sidebar of the desktop GUI. Tabs at the top switch between **Overview / Personal plan / Team plan**: the overview shows each plan's progress and usage trend as donut and line charts, and every plan gets its own page with limit progress bars, reset countdowns, and usage for today and the last 7 / 30 days (tokens, calls, breakdown by model). It also adds a sidebar + menu launcher and a titlebar usage pill (hover for each plan's percentage, click to open the panel).
 
-![GLM quota panel: overview, personal plan, team plan](https://raw.githubusercontent.com/huanlis/opencode-glm-plugin/main/assets/panel-tabs.png)
+![GLM quota panel: overview, personal plan, team plan](https://raw.githubusercontent.com/huanlis/opencode-glm-plugin/main/assets/panel-tabs.en.png)
 
 ## Install
 
