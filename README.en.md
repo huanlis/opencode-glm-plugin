@@ -58,7 +58,7 @@ The API key is read automatically from OpenCode's stored credentials (`zhipuai-c
 
 ### Multiple plans
 
-When an account has both a personal and a team plan, the plugin finds and shows them all automatically: it queries `type=1` and `type=2` with the current configuration (plus the configured `planType`, which is listed first), ignores empty responses, and never shows the same plan twice. The team plan needs the `organization` / `project` pair above; the personal plan needs no extra configuration.
+When an account has both a personal and a team plan, the plugin finds and shows them all automatically: it queries `type=1` and `type=2` with the current configuration (personal first, then team; any other configured `planType` is queried too), ignores empty responses, and never shows the same plan twice. The team plan needs the `organization` / `project` pair above; the personal plan needs no extra configuration.
 
 `organization` is the console's organization ID (「组织ID」) and `project` is the team project's project ID (「项目ID」). Both are on the [organization management page](https://bigmodel.cn/usercenter/proj-mgmt/org-mgmt) — switch to the team's organization at the top left first:
 

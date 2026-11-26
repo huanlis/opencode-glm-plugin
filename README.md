@@ -58,7 +58,7 @@ API Key 自动从 OpenCode 登录凭据读取（`~/.local/share/opencode/auth.js
 
 ### 多套餐
 
-账号下同时有个人套餐和团队套餐时，插件会自动把它们都查出来分组显示：用当前配置分别请求 `type=1` 和 `type=2`（以及已配置的 `planType`，它排最前），返回空的结果自动忽略，同一个套餐只显示一份。团队套餐需要上面那组 `organization` / `project`，个人套餐无需额外配置。
+账号下同时有个人套餐和团队套餐时，插件会自动把它们都查出来分组显示：用当前配置分别请求 `type=1` 和 `type=2`（个人在前、团队在后；配置了其他 `planType` 值时一并查询），返回空的结果自动忽略，同一个套餐只显示一份。团队套餐需要上面那组 `organization` / `project`，个人套餐无需额外配置。
 
 `organization` 填控制台里的「组织ID」，`project` 填团队项目的「项目ID」，都在[组织管理页](https://bigmodel.cn/usercenter/proj-mgmt/org-mgmt)查看（页面左上角先切换到团队所在组织）：
 
