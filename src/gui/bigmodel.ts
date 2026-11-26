@@ -313,11 +313,20 @@ async function fetchUsage(config: GlmConfig, days: number): Promise<UsageRange> 
   return fetchUsageBetween(config, start, end, 96)
 }
 
-/** Today since local midnight; the chart grows across a fixed 24-bucket day. */
+/** Today since local midnight, padded to the full 24-hour axis: the curve
+ * starts flat, grows through the day, and the hours stay where they belong. */
 async function fetchToday(config: GlmConfig): Promise<UsageRange> {
-  const end = new Date()
-  const start = new Date(end.getFullYear(), end.getMonth(), end.getDate())
-  return fetchUsageBetween(config, start, end, 0)
+  const now = new Date()
+  const start = new Date(now.getFullYear(), now.getMonth(), now.getDate())
+  const range = await fetchUsageBetween(config, start, now, 0)
+  const padHours = 24 - range.buckets.length
+  if (padHours <= 0) return range
+  const hour = range.buckets.length
+  const extra = Array.from({ length: padHours }, (_, i) => {
+    const at = new Date(start.getFullYear(), start.getMonth(), start.getDate(), hour + i)
+    return { time: formatLocal(at).slice(0, 13) + ":00", tokens: 0 }
+  })
+  return { ...range, buckets: [...range.buckets, ...extra] }
 }
 
 /**
