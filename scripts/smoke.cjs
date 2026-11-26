@@ -108,6 +108,9 @@ async function testMain() {
         .map((l) => `${l.kind}=${l.percentage === undefined ? "?" : Math.round(l.percentage) + "%"}${l.nextResetTime ? " reset@" + new Date(l.nextResetTime).toISOString() : ""}`)
         .join(" | ") || "(none)",
     )
+    for (const [label, range] of [["today", plan.usageToday], ["7d", plan.usage7d], ["30d", plan.usage30d]]) {
+      if (range) console.log(`  usage ${label}: tokens=${range.totalTokens} buckets=${range.buckets.length} (${range.granularity})`)
+    }
   }
   for (const [label, range] of [["today", snap.usageToday], ["7d", snap.usage7d], ["30d", snap.usage30d]]) {
     if (!range) {
@@ -115,7 +118,7 @@ async function testMain() {
       continue
     }
     console.log(
-      `usage ${label}: tokens=${range.totalTokens} calls=${range.totalCalls} buckets=${range.buckets.length} (${range.granularity}) models=${range.models.map((m) => m.name).join(",")}`,
+      `usage ${label}: tokens=${range.totalTokens} cache=${range.cacheHitRate === undefined ? "?" : Math.round(range.cacheHitRate * 100) + "%"} buckets=${range.buckets.length} (${range.granularity}) models=${range.models.map((m) => m.name).join(",")}`,
     )
   }
   const forced = await provided.refresh()

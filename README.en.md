@@ -9,7 +9,7 @@ Source and issues: <https://github.com/huanlis/opencode-glm-plugin>
 
 A quota panel for the GLM Coding Plan (Zhipu AI), as an OpenCode Desktop plugin.
 
-It adds a **GLM Quota** tab to the right sidebar of the desktop GUI. Tabs at the top switch between **Overview / Personal plan / Team plan**: the overview shows each plan's progress and usage trend as donut and line charts, and every plan gets its own page with limit progress bars, reset countdowns, and usage for today and the last 7 / 30 days (tokens, calls, breakdown by model). It also adds a sidebar + menu launcher and a titlebar usage pill (hover for each plan's percentage, click to open the panel).
+It adds a **GLM Quota** tab to the right sidebar of the desktop GUI. Tabs at the top switch between **Overview / Personal plan / Team plan**: the overview shows each plan's progress and usage trend as donut and line charts, and every plan gets its own page with limit progress bars, reset countdowns, and its own usage for today and the last 7 / 30 days (tokens, cache hit rate, breakdown by model). It also adds a sidebar + menu launcher and a titlebar usage pill (hover for each plan's percentage, click to open the panel).
 
 ![GLM quota panel: overview, personal plan, team plan](https://raw.githubusercontent.com/huanlis/opencode-glm-plugin/main/assets/panel-tabs.en.png)
 
@@ -79,14 +79,14 @@ For full control (several teams, custom names, or only some plans), list them ex
 
 Each entry takes `label` / `planType` / `organization` / `project`; fields you leave out inherit the top-level options. The list is queried exactly as written, and plans that come back empty or failed are still shown so the problem is visible.
 
-Note: usage (today / 7 days / 30 days) is account-wide. The API does not split it by plan, so every page shows the same figures.
+Note: usage is fetched per plan — today / 7 days / 30 days on a plan page is that plan's own data, while the overview shows the sum of all plans (labelled "Account-wide"). The usage API does not report call counts, so the panel shows tokens and the cache hit rate instead.
 
 The plugin reloads automatically after its options change; no need to restart the app.
 
 ## Data sources
 
 - `GET {base}/api/monitor/usage/quota/limit` — plan window limits and reset times
-- `GET {base}/api/monitor/usage/model-usage?startTime=&endTime=` — usage series and per-model totals
+- `GET {base}/api/monitor/token-usage/usage-detail?startTime=&endTime=&type=&usageType=MODEL` — per-plan usage series (personal `type=1`, team `type=3`), per-model totals and the cache hit rate
 
 Authentication: `Authorization: <raw key>` (no Bearer prefix).
 

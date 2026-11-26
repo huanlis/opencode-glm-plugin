@@ -55,15 +55,19 @@ export interface UsageBucket {
 
 export interface UsageRange {
   readonly totalTokens: number
-  readonly totalCalls: number
   readonly granularity: string
   readonly buckets: readonly UsageBucket[]
   readonly models: readonly { readonly name: string; readonly tokens: number }[]
+  /** Cache hit rate, 0-1, when the server reports one. */
+  readonly cacheHitRate?: number
+  /** Raw input / cached totals, kept so summed ranges can re-derive the rate. */
+  readonly inputTokens?: number
+  readonly cachedInputTokens?: number
 }
 
 export type SnapshotStatus = "ok" | "no-key" | "error" | "empty"
 
-/** One plan's quota result inside a snapshot. */
+/** One plan's quota and usage inside a snapshot. */
 export interface PlanQuota {
   readonly label?: string
   /** The effective plan type after inheritance, `undefined` for a no-type query. */
@@ -74,6 +78,10 @@ export interface PlanQuota {
   readonly hint?: "org-project"
   readonly level?: string
   readonly limits: readonly QuotaLimit[]
+  /** This plan's own usage, when the server could report it. */
+  readonly usageToday?: UsageRange
+  readonly usage7d?: UsageRange
+  readonly usage30d?: UsageRange
 }
 
 export interface Snapshot {
@@ -84,6 +92,7 @@ export interface Snapshot {
   readonly plans: readonly PlanQuota[]
   /** Every ok plan's limits, flattened for the single-plan consumers. */
   readonly limits: readonly QuotaLimit[]
+  /** Every plan's usage added up: the account total the overview shows. */
   readonly usageToday?: UsageRange
   readonly usage7d?: UsageRange
   readonly usage30d?: UsageRange
@@ -306,109 +315,186 @@ function num(value: unknown): number | undefined {
   return typeof value === "number" && Number.isFinite(value) ? value : undefined
 }
 
-/** `/api/monitor/usage/model-usage`: buckets, totals and a per-model breakdown. */
-async function fetchUsage(config: GlmConfig, days: number): Promise<UsageRange> {
-  const end = new Date()
-  const start = new Date(end.getTime() - days * 86_400_000)
-  return fetchUsageBetween(config, start, end, 96)
-}
-
-/** Today since local midnight, padded to the full 24-hour axis: the curve
- * starts flat, grows through the day, and the hours stay where they belong. */
-async function fetchToday(config: GlmConfig): Promise<UsageRange> {
-  const now = new Date()
-  const start = new Date(now.getFullYear(), now.getMonth(), now.getDate())
-  const range = await fetchUsageBetween(config, start, now, 0)
-  const padHours = 24 - range.buckets.length
-  if (padHours <= 0) return range
-  const hour = range.buckets.length
-  const extra = Array.from({ length: padHours }, (_, i) => {
-    const at = new Date(start.getFullYear(), start.getMonth(), start.getDate(), hour + i)
-    return { time: formatLocal(at).slice(0, 13) + ":00", tokens: 0 }
-  })
-  return { ...range, buckets: [...range.buckets, ...extra] }
-}
-
 /**
- * Usage is account-wide: the endpoint ignores the organization/project headers
- * and rejects a `type` parameter with an empty body, so it is fetched once and
- * shared by every plan.
+ * The usage endpoint's plan selector: 1 personal, 3 team. 2 is the enterprise
+ * aggregate and only answers for the main account, so it is never used.
  */
-async function fetchUsageBetween(config: GlmConfig, start: Date, end: Date, downsampleMax: number): Promise<UsageRange> {
-  const query = `startTime=${encodeURIComponent(formatLocal(start))}&endTime=${encodeURIComponent(formatLocal(end))}`
-  const data = (await getJson(config, `${config.baseUrl}/api/monitor/usage/model-usage?${query}`)) as
+function usageTypeOf(planType: number | undefined): number {
+  return planType === 2 ? 3 : 1
+}
+
+/** `/api/monitor/token-usage/usage-detail`: one plan's tokens, per model, day or hour buckets. */
+async function fetchUsageBetween(config: GlmConfig, start: Date, end: Date): Promise<UsageRange> {
+  const query =
+    `startTime=${encodeURIComponent(formatLocal(start))}` +
+    `&endTime=${encodeURIComponent(formatLocal(end))}` +
+    `&type=${usageTypeOf(config.planType)}&usageType=MODEL`
+  const data = (await getJson(config, `${config.baseUrl}/api/monitor/token-usage/usage-detail?${query}`)) as
     | {
-        x_time?: unknown
-        tokensUsage?: unknown
-        totalUsage?: unknown
-        modelSummaryList?: unknown
         granularity?: unknown
+        summary?: { totalTokens?: { value?: unknown }; cacheHitRate?: { value?: unknown } }
+        modelUsage?: {
+          totalUsage?: { totalTokens?: unknown }
+          xTime?: unknown
+          modelSummaryList?: unknown
+          modelDataList?: unknown
+        }
       }
     | undefined
 
-  const times = Array.isArray(data?.x_time) ? (data!.x_time as string[]) : []
-  const tokens = Array.isArray(data?.tokensUsage) ? (data!.tokensUsage as number[]) : []
-  const buckets = times.map((time, index) => ({ time, tokens: Number(tokens[index] ?? 0) }))
+  const usage = data?.modelUsage ?? {}
+  const times = Array.isArray(usage.xTime) ? (usage.xTime as string[]) : []
+  const details = Array.isArray(usage.modelDataList)
+    ? (usage.modelDataList as { modelName?: string; totalTokensUsage?: unknown }[])
+    : []
 
-  const totals = (data?.totalUsage ?? {}) as { totalTokensUsage?: number; totalModelCallCount?: number }
-  const models = Array.isArray(data?.modelSummaryList)
-    ? (data!.modelSummaryList as { modelName?: string; totalTokens?: number }[])
+  // One total per bucket, the sum across models.
+  const summed = new Array<number>(times.length).fill(0)
+  for (const detail of details) {
+    const series = Array.isArray(detail.totalTokensUsage) ? (detail.totalTokensUsage as (number | null)[]) : []
+    for (let i = 0; i < summed.length; i++) summed[i]! += Number(series[i] ?? 0)
+  }
+  const buckets = times.map((time, index) => ({ time, tokens: summed[index] ?? 0 }))
+
+  const models = Array.isArray(usage.modelSummaryList)
+    ? (usage.modelSummaryList as { modelName?: string; totalTokens?: unknown }[])
         .map((m) => ({ name: String(m.modelName ?? "?"), tokens: Number(m.totalTokens ?? 0) }))
         .sort((a, b) => b.tokens - a.tokens)
     : []
 
-  const sum = buckets.reduce((total, bucket) => total + bucket.tokens, 0)
+  const reportedTotal = Number(data?.summary?.totalTokens?.value)
+  const totalTokens = Number.isFinite(reportedTotal)
+    ? reportedTotal
+    : typeof usage.totalUsage?.totalTokens === "number"
+      ? usage.totalUsage.totalTokens
+      : buckets.reduce((total, bucket) => total + bucket.tokens, 0)
+
+  // Cache rate and raw input totals come per model; the ratio needs both.
+  let inputTokens = 0
+  let cachedInputTokens = 0
+  for (const detail of details as { inputTokensUsage?: unknown; cachedInputTokensUsage?: unknown }[]) {
+    const input = Array.isArray(detail.inputTokensUsage) ? (detail.inputTokensUsage as (number | null)[]) : []
+    const cached = Array.isArray(detail.cachedInputTokensUsage) ? (detail.cachedInputTokensUsage as (number | null)[]) : []
+    for (const value of input) inputTokens += Number(value ?? 0)
+    for (const value of cached) cachedInputTokens += Number(value ?? 0)
+  }
+  const reportedRate = Number(data?.summary?.cacheHitRate?.value)
+  const cacheHitRate = Number.isFinite(reportedRate)
+    ? reportedRate
+    : inputTokens > 0
+      ? cachedInputTokens / inputTokens
+      : undefined
+
   return {
-    totalTokens: typeof totals.totalTokensUsage === "number" ? totals.totalTokensUsage : sum,
-    totalCalls: typeof totals.totalModelCallCount === "number" ? totals.totalModelCallCount : 0,
-    granularity: typeof data?.granularity === "string" ? data.granularity : "hourly",
-    buckets: downsampleMax > 0 ? downsample(buckets, downsampleMax) : buckets,
+    totalTokens,
+    granularity: data?.granularity === "DAY" ? "daily" : "hourly",
+    buckets,
     models,
+    cacheHitRate,
+    inputTokens,
+    cachedInputTokens,
   }
 }
 
-/** Keeps the sparkline light on long ranges by merging buckets into at most `max` slices. */
-function downsample(buckets: UsageBucket[], max: number): UsageBucket[] {
-  if (buckets.length <= max) return buckets
-  const groupSize = Math.ceil(buckets.length / max)
-  const merged: UsageBucket[] = []
-  for (let i = 0; i < buckets.length; i += groupSize) {
-    const group = buckets.slice(i, i + groupSize)
-    merged.push({
-      time: group[0]!.time,
-      tokens: group.reduce((total, bucket) => total + bucket.tokens, 0),
-    })
-  }
-  return merged
+/** Today since local midnight, padded to the full 24-hour axis. */
+async function fetchToday(config: GlmConfig): Promise<UsageRange> {
+  const now = new Date()
+  const start = new Date(now.getFullYear(), now.getMonth(), now.getDate())
+  const end = new Date(now.getFullYear(), now.getMonth(), now.getDate(), 23, 59, 59)
+  const range = await fetchUsageBetween(config, start, end)
+  const padHours = 24 - range.buckets.length
+  if (padHours <= 0) return range
+  const extra = Array.from({ length: padHours }, (_, i) => {
+    const at = new Date(start.getFullYear(), start.getMonth(), start.getDate(), range.buckets.length + i)
+    return { time: formatLocal(at), tokens: 0 }
+  })
+  return { ...range, buckets: [...range.buckets, ...extra] }
 }
 
-/** One plan's quota fetch; failures become a per-plan status, never a throw. */
-async function fetchPlanQuota(config: GlmConfig, query: PlanQuery): Promise<{ plan: PlanQuota; fingerprint?: string }> {
-  const planConfig: GlmConfig = {
+/** The last `days` days, including today. */
+async function fetchUsage(config: GlmConfig, days: number): Promise<UsageRange> {
+  const now = new Date()
+  const start = new Date(now.getFullYear(), now.getMonth(), now.getDate() - (days - 1))
+  const end = new Date(now.getFullYear(), now.getMonth(), now.getDate(), 23, 59, 59)
+  return fetchUsageBetween(config, start, end)
+}
+
+/** Adds ranges up by bucket index: the account total the overview shows. */
+function sumUsage(ranges: (UsageRange | undefined)[]): UsageRange | undefined {
+  const present = ranges.filter((range): range is UsageRange => range !== undefined)
+  if (present.length === 0) return undefined
+  if (present.length === 1) return present[0]
+
+  const length = Math.max(...present.map((range) => range.buckets.length))
+  const buckets: UsageBucket[] = []
+  for (let i = 0; i < length; i++) {
+    const time = present.find((range) => range.buckets[i])?.buckets[i]?.time ?? ""
+    const tokens = present.reduce((total, range) => total + (range.buckets[i]?.tokens ?? 0), 0)
+    buckets.push({ time, tokens })
+  }
+
+  const merged = new Map<string, number>()
+  for (const range of present) for (const model of range.models) merged.set(model.name, (merged.get(model.name) ?? 0) + model.tokens)
+  const models = [...merged.entries()].map(([name, tokens]) => ({ name, tokens })).sort((a, b) => b.tokens - a.tokens)
+
+  const inputTokens = present.reduce((total, range) => total + (range.inputTokens ?? 0), 0)
+  const cachedInputTokens = present.reduce((total, range) => total + (range.cachedInputTokens ?? 0), 0)
+
+  return {
+    totalTokens: present.reduce((total, range) => total + range.totalTokens, 0),
+    granularity: present[0]!.granularity,
+    buckets,
+    models,
+    cacheHitRate: inputTokens > 0 ? cachedInputTokens / inputTokens : undefined,
+    inputTokens,
+    cachedInputTokens,
+  }
+}
+
+/** One plan's config: the query's overrides on top of the account-level defaults. */
+function planConfigOf(config: GlmConfig, query: PlanQuery): GlmConfig {
+  return {
     baseUrl: config.baseUrl,
     apiKey: config.apiKey,
     organization: query.organization ?? config.organization,
     project: query.project ?? config.project,
     planType: query.planType ?? config.planType,
   }
+}
+
+/** One plan's quota and usage; failures become per-plan status, never a throw. */
+async function fetchPlan(
+  config: GlmConfig,
+  query: PlanQuery,
+): Promise<{ plan: PlanQuota; fingerprint?: string; usageType: number }> {
+  const planConfig = planConfigOf(config, query)
+  const base = { label: query.label, planType: planConfig.planType }
   try {
-    const quota = await fetchQuota(planConfig)
+    const [quota, usageToday, usage7d, usage30d] = await Promise.all([
+      fetchQuota(planConfig),
+      fetchToday(planConfig).catch(() => undefined),
+      fetchUsage(planConfig, 7).catch(() => undefined),
+      fetchUsage(planConfig, 30).catch(() => undefined),
+    ])
     return {
       fingerprint: quota.fingerprint,
+      usageType: usageTypeOf(planConfig.planType),
       plan: {
-        label: query.label,
-        planType: planConfig.planType,
+        ...base,
         status: "ok",
         level: quota.level,
         limits: quota.limits,
+        usageToday,
+        usage7d,
+        usage30d,
       },
     }
   } catch (cause) {
     const empty = cause instanceof EmptyQuotaError
     return {
+      usageType: usageTypeOf(planConfig.planType),
       plan: {
-        label: query.label,
-        planType: planConfig.planType,
+        ...base,
         status: empty ? "empty" : "error",
         message: empty ? undefined : cause instanceof Error ? cause.message : String(cause),
         hint: empty ? "org-project" : undefined,
@@ -427,12 +513,7 @@ export async function fetchSnapshot(rawOptions: unknown): Promise<Snapshot> {
     if ("error" in config) return { status: "no-key", plans: [], limits: [], fetchedAt }
 
     const queries = planQueries(options)
-    const [results, usageToday, usage7d, usage30d] = await Promise.all([
-      Promise.all(queries.map((query) => fetchPlanQuota(config, query))),
-      fetchToday(config).catch(() => undefined),
-      fetchUsage(config, 7).catch(() => undefined),
-      fetchUsage(config, 30).catch(() => undefined),
-    ])
+    const results = await Promise.all(queries.map((query) => fetchPlan(config, query)))
 
     // The same plan often answers for several type values; keep the first hit.
     // Only auto discovery dedupes — an explicit `plans` list is taken as-is.
@@ -462,9 +543,9 @@ export async function fetchSnapshot(rawOptions: unknown): Promise<Snapshot> {
       hint: status === "empty" ? "org-project" : undefined,
       plans,
       limits: okPlans.flatMap((plan) => plan.limits),
-      usageToday,
-      usage7d,
-      usage30d,
+      usageToday: sumUsage(plans.map((plan) => plan.usageToday)),
+      usage7d: sumUsage(plans.map((plan) => plan.usage7d)),
+      usage30d: sumUsage(plans.map((plan) => plan.usage30d)),
       fetchedAt,
     }
   } catch (cause) {

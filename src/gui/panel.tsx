@@ -101,12 +101,12 @@ export function QuotaPanel() {
                   <PlanCard plan={plan()} now={now()} zh={zh()} />
                   <UsageSection
                     title={ctx.t("section.today")}
-                    range={snap().usageToday}
+                    range={plan().usageToday}
                     zh={zh()}
                     chart={{ minSpan: 24, hourTicks: true }}
                   />
-                  <UsageSection title={ctx.t("section.7d")} range={snap().usage7d} zh={zh()} />
-                  <UsageSection title={ctx.t("section.30d")} range={snap().usage30d} zh={zh()} />
+                  <UsageSection title={ctx.t("section.7d")} range={plan().usage7d} zh={zh()} />
+                  <UsageSection title={ctx.t("section.30d")} range={plan().usage30d} zh={zh()} />
                   <Foot at={snap().fetchedAt} />
                 </div>
               )}
@@ -135,8 +135,15 @@ function OverviewPage(props: { snapshot: Snapshot; now: number; zh: boolean }) {
         zh={props.zh}
         chart={{ minSpan: 24, hourTicks: true }}
         models={false}
+        scope={ctx.t("usage.account")}
       />
-      <UsageSection title={ctx.t("section.7d")} range={props.snapshot.usage7d} zh={props.zh} models={false} />
+      <UsageSection
+        title={ctx.t("section.7d")}
+        range={props.snapshot.usage7d}
+        zh={props.zh}
+        models={false}
+        scope={ctx.t("usage.account")}
+      />
       <Foot at={props.snapshot.fetchedAt} />
     </div>
   )
@@ -300,18 +307,25 @@ function UsageSection(props: {
   chart?: { minSpan?: number; hourTicks?: boolean }
   /** Omit the per-model breakdown, e.g. on the compact overview. */
   models?: boolean
+  /** Label before the granularity, e.g. the account-total note on the overview. */
+  scope?: string
 }) {
   const ctx = usePlugin<typeof definition>()
-  const has = () => !!props.range && (props.range.totalTokens > 0 || props.range.totalCalls > 0)
+  const has = () => !!props.range && props.range.totalTokens > 0
   const byDay = () => props.range?.granularity === "daily"
   const showModels = () => props.models !== false
+  const cacheRate = () => {
+    const rate = props.range?.cacheHitRate
+    return rate === undefined ? undefined : Math.round(rate * 100)
+  }
   return (
     <section class="glmq-card">
       <div class="glmq-card-row">
         <div class="glmq-card-title">{props.title}</div>
         <Show when={has()}>
           <span class="glmq-gran">
-            {ctx.t("usage.account")} · {byDay() ? ctx.t("chart.byDay") : ctx.t("chart.byHour")}
+            {props.scope ? `${props.scope} · ` : ""}
+            {byDay() ? ctx.t("chart.byDay") : ctx.t("chart.byHour")}
           </span>
         </Show>
       </div>
@@ -324,10 +338,12 @@ function UsageSection(props: {
             <b>{formatTokens(props.range!.totalTokens, props.zh)}</b>
             <span>{ctx.t("usage.tokens")}</span>
           </div>
-          <div class="glmq-total">
-            <b>{formatCount(props.range!.totalCalls)}</b>
-            <span>{ctx.t("usage.calls")}</span>
-          </div>
+          <Show when={cacheRate() !== undefined}>
+            <div class="glmq-total">
+              <b>{cacheRate()}%</b>
+              <span>{ctx.t("usage.cacheRate")}</span>
+            </div>
+          </Show>
         </div>
         <Chart buckets={props.range!.buckets} zh={props.zh} span={props.chart} />
         <Show when={showModels() && props.range!.models.length > 0}>
@@ -497,10 +513,6 @@ function Foot(props: { at: number }) {
 function shortDate(time: string): string {
   const day = time.slice(5, 10)
   return day.includes("-") ? day.replace("-", "/") : day
-}
-
-function formatCount(value: number): string {
-  return new Intl.NumberFormat(undefined, { notation: value >= 100000 ? "compact" : "standard" }).format(value)
 }
 
 function formatClock(at: number): string {

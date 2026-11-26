@@ -9,7 +9,7 @@
 
 GLM Coding Plan（智谱）额度面板，OpenCode Desktop 插件。
 
-在桌面端 GUI 的右侧边栏添加「GLM 额度」标签页：顶部「总览 / 个人套餐 / 团队套餐」页签切换，总览用环形图与曲线图展示各套餐进度和用量趋势；每个套餐有独立页面，含限额进度条、重置倒计时、今天与最近 7 天 / 30 天用量（Token、调用次数、按模型分解）。另附侧边栏 + 菜单启动项与标题栏用量徽标（悬停显示各套餐百分比，点击打开面板）。
+在桌面端 GUI 的右侧边栏添加「GLM 额度」标签页：顶部「总览 / 个人套餐 / 团队套餐」页签切换，总览用环形图与曲线图展示各套餐进度和用量趋势；每个套餐有独立页面，含限额进度条、重置倒计时、该套餐自己的今天 / 最近 7 天 / 30 天用量（Token、缓存命中率、按模型分解）。另附侧边栏 + 菜单启动项与标题栏用量徽标（悬停显示各套餐百分比，点击打开面板）。
 
 ![GLM 额度面板：总览 / 个人套餐 / 团队套餐](https://raw.githubusercontent.com/huanlis/opencode-glm-plugin/main/assets/panel-tabs.png)
 
@@ -79,14 +79,14 @@ API Key 自动从 OpenCode 登录凭据读取（`~/.local/share/opencode/auth.js
 
 每项可写 `label` / `planType` / `organization` / `project`，未写的字段继承顶层 options；列表严格按条目查询，空或失败的套餐也会显示出来方便排查。
 
-注意：用量（今天 / 7 天 / 30 天）是账号总用量，接口不区分套餐，所有套餐共用一份。
+注意：用量按套餐分别取数——每个套餐页的今天 / 7 天 / 30 天是该套餐自己的数据，总览页显示各套餐合计（标注「账号总用量」）。用量接口不返回调用次数，面板展示 Token 与缓存命中率。
 
 修改 options 后插件会自动重载，不需要重启应用。
 
 ## 数据源
 
 - `GET {base}/api/monitor/usage/quota/limit` — 套餐窗口限额与重置时间
-- `GET {base}/api/monitor/usage/model-usage?startTime=&endTime=` — 用量序列与按模型汇总
+- `GET {base}/api/monitor/token-usage/usage-detail?startTime=&endTime=&type=&usageType=MODEL` — 按套餐的用量序列（个人 `type=1`，团队 `type=3`）、按模型汇总与缓存命中率
 
 鉴权：`Authorization: <裸 key>`（无 Bearer 前缀）。
 

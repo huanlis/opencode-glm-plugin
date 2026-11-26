@@ -19,7 +19,7 @@ const en = {
   "plan.tagTeam": "Team",
   "plan.tagOther": "Plan",
   "usage.tokens": "Tokens",
-  "usage.calls": "Calls",
+  "usage.cacheRate": "Cache hit rate",
   "usage.models": "By model",
   "usage.account": "Account-wide",
   "usage.empty": "No usage data",

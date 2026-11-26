@@ -19,7 +19,7 @@ const zh = {
   "plan.tagTeam": "团队",
   "plan.tagOther": "套餐",
   "usage.tokens": "Token 用量",
-  "usage.calls": "调用次数",
+  "usage.cacheRate": "缓存命中率",
   "usage.models": "按模型",
   "usage.account": "账号总用量",
   "usage.empty": "暂无用量数据",
